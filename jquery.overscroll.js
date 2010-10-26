@@ -149,19 +149,20 @@
 			scrollDelta: 5.9,
 			thumbThickness: 8,
 			thumbOpacity: 0.7,
-			boundingBox: 1000000
+			boundingBox: 1000000,
+			cssURL: /url\((.+)\)/ 
 		},
 		
 		// main initialization function
 		init: function(target, options, data) {
-			
+			var matches;
 			data = {
 				sizing: o.getSizing(target)
 			};
 			
 			options = $.extend({
-				openedCursor: "http://github.com/downloads/azoff/Overscroll/opened.cur",
-				closedCursor: "http://github.com/downloads/azoff/Overscroll/closed.cur",
+				openedCursor: "url('http://github.com/downloads/azoff/Overscroll/opened.cur')",
+				closedCursor: "url('http://github.com/downloads/azoff/Overscroll/closed.cur')",
 				showThumbs: true,
 				wheelDirection: 'vertical',
 				wheelDelta: o.constants.wheelDelta,
@@ -175,12 +176,14 @@
 			
 			// cache cursors
 			options.cache = { openedCursor: new Image(), closedCursor: new Image() };
-			options.cache.openedCursor.src = options.openedCursor;
-			options.cache.closedCursor.src = options.closedCursor;
+			if (matches = o.constants.cssURL.exec(options.openedCursor))
+				options.cache.openedCursor.src = matches[1];
+			if (matches = o.constants.cssURL.exec(options.closedCursor))
+				options.cache.closedCursor.src = matches[1];
 			
 			// set css
-			options.openedCss = {cursor: "url('"+options.openedCursor+"'),default"};
-			options.closedCss = {cursor: "url('"+options.closedCursor+"'),default"};
+			options.openedCss = {cursor: options.openedCursor+",default"};
+			options.closedCss = {cursor: options.closedCursor+",default"};
 			
 			target.css('overflow', 'hidden').css(options.openedCss)
 				.bind(o.events.wheel, data, o.wheel)
@@ -189,16 +192,15 @@
 				.bind(o.events.ignored, o.noop); // disable proprietary drag handlers
 				
 			if(options.showThumbs) {
-				
 				data.thumbs = {};
 								
 				if(data.sizing.container.scrollWidth > 0 && options.direction !== 'vertical') {
-					data.thumbs.horizontal = $(o.div).css(o.getThumbCss(data.sizing.thumbs.horizontal)).fadeTo(0, 0);
+					data.thumbs.horizontal = $(o.div).css(o.getThumbCss(data.sizing.thumbs.horizontal, options.thumbCss)).fadeTo(0, 0);
 					target.prepend(data.thumbs.horizontal);	
 				}
 				
 				if(data.sizing.container.scrollHeight > 0 && options.direction !== 'horizontal') {
-					data.thumbs.vertical = $(o.div).css(o.getThumbCss(data.sizing.thumbs.vertical)).fadeTo(0, 0);
+					data.thumbs.vertical = $(o.div).css(o.getThumbCss(data.sizing.thumbs.vertical, options.thumbCss)).fadeTo(0, 0);
 					target.prepend(data.thumbs.vertical);				
 				}
 				
@@ -436,9 +438,9 @@
 		},
 		
 		// gets the CSS object for a thumb
-		getThumbCss: function(size) {
+		getThumbCss: function(size, css) {
 		
-			return {
+			return $.extend({
 				position: "absolute",
 				"background-color": "black",
 				width: size.width + "px",
@@ -447,7 +449,7 @@
 				"-moz-border-radius": size.corner + "px",
 				"-webkit-border-radius":  size.corner + "px", 
 				"border-radius":  size.corner + "px"
-			};
+			}, css || {});
 			
 		}
 		
