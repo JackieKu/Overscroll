@@ -132,6 +132,7 @@
 			start: "select mousedown touchstart",
 			drag: "mousemove touchmove",
 			scroll: "scroll",
+			resize: "resize",
 			end: "mouseup mouseleave touchend",
 			ignored: "dragstart drag"
 		},
@@ -154,11 +155,8 @@
 		},
 		
 		// main initialization function
-		init: function(target, options, data) {
-			var matches;
-			data = {
-				sizing: o.getSizing(target)
-			};
+		init: function(target, options, data, matches) {
+			data = {};
 			
 			options = $.extend({
 				openedCursor: "url('http://github.com/downloads/azoff/Overscroll/opened.cur')",
@@ -190,39 +188,13 @@
 				.bind(o.events.start, data, o.start)
 				.bind(o.events.end, data, o.stop)
 				.bind(o.events.ignored, o.noop); // disable proprietary drag handlers
-				
-			if(options.showThumbs) {
-				data.thumbs = {};
-								
-				if(data.sizing.container.scrollWidth > 0 && options.direction !== 'vertical') {
-					data.thumbs.horizontal = $(o.div).css(o.getThumbCss(data.sizing.thumbs.horizontal, options.thumbCss)).fadeTo(0, 0);
-					target.prepend(data.thumbs.horizontal);	
-				}
-				
-				if(data.sizing.container.scrollHeight > 0 && options.direction !== 'horizontal') {
-					data.thumbs.vertical = $(o.div).css(o.getThumbCss(data.sizing.thumbs.vertical, options.thumbCss)).fadeTo(0, 0);
-					target.prepend(data.thumbs.vertical);				
-				}
-				
-				data.sizing.relative = data.thumbs.vertical || data.thumbs.horizontal;
-				
-				if(data.sizing.relative) {
-					data.sizing.relative.oldOffset = data.sizing.relative.offset();
-					target.scrollTop(o.constants.boundingBox).scrollLeft(o.constants.boundingBox);
-					data.sizing.relative.remove().prependTo(target);
-					data.sizing.relative.newOffset = data.sizing.relative.offset();
-					data.sizing.relative = 
-						data.sizing.relative.oldOffset.left != data.sizing.relative.newOffset.left ||
-						data.sizing.relative.oldOffset.top != data.sizing.relative.newOffset.top;
-					target.scrollTop(0).scrollLeft(0);
-					target.bind(o.events.scroll, data, o.scroll);
-				}
 
-			}
-			
+			$(window).bind(o.events.resize, data, o.resize);
+
 			data.target = target;
 			data.options = options;
-				
+
+			o.setThumbs(data);
 		},
 		
 		// toggles the drag mode of the target
@@ -397,9 +369,53 @@
 			
 			return !event.data.target.data('dragging');
 		},
+
+		resize: function(event) {
+			o.setThumbs(event.data);
+		},
+
+		setThumbs: function(data) {
+			var target = data.target,
+				options = data.options;
+			data.sizing = o.getSizing(target);
+			if (options.showThumbs) {
+				if (!data.thumbs)
+					data.thumbs = {};
+				else {
+					if (data.thumbs.horizontal)
+						data.thumbs.horizontal.remove();
+					if (data.thumbs.vertical)
+						data.thumbs.vertical.remove();
+				}
+
+				if(data.sizing.container.scrollWidth > 0 && options.direction !== 'vertical') {
+					data.thumbs.horizontal = $(o.div).css(o.getThumbCss(data.sizing.thumbs.horizontal, options.thumbCss)).fadeTo(0, 0);
+					target.prepend(data.thumbs.horizontal);
+				}
+
+				if(data.sizing.container.scrollHeight > 0 && options.direction !== 'horizontal') {
+					data.thumbs.vertical = $(o.div).css(o.getThumbCss(data.sizing.thumbs.vertical, options.thumbCss)).fadeTo(0, 0);
+					target.prepend(data.thumbs.vertical);
+				}
+
+				data.sizing.relative = data.thumbs.vertical || data.thumbs.horizontal;
+
+				if(data.sizing.relative) {
+					data.sizing.relative.oldOffset = data.sizing.relative.offset();
+					target.scrollTop(o.constants.boundingBox).scrollLeft(o.constants.boundingBox);
+					data.sizing.relative.remove().prependTo(target);
+					data.sizing.relative.newOffset = data.sizing.relative.offset();
+					data.sizing.relative =
+						data.sizing.relative.oldOffset.left != data.sizing.relative.newOffset.left ||
+						data.sizing.relative.oldOffset.top != data.sizing.relative.newOffset.top;
+					target.scrollTop(0).scrollLeft(0);
+					target.bind(o.events.scroll, data, o.scroll);
+				}
+			}			
+		},
 		
 		// gets sizing for the container and thumbs
-		getSizing: function(container, sizing) {
+		getSizing: function(container, sizing, pos) {
 		
 			sizing = { };
 			
@@ -407,12 +423,17 @@
 				width: container.width(),
 				height: container.height()
 			};
-			
+
+			pos = {
+				left: container.scrollLeft(),
+				top: container.scrollTop()
+			};
+
 			container.scrollLeft(o.constants.boundingBox).scrollTop(o.constants.boundingBox);
 			sizing.container.scrollWidth = container.scrollLeft();
-			sizing.container.scrollHeight = container.scrollTop();							
-			container.scrollTop(0).scrollLeft(0);
-					
+			sizing.container.scrollHeight = container.scrollTop();
+			container.scrollTop(pos.top).scrollLeft(pos.left);
+
 			sizing.thumbs = {
 				horizontal: {
 					width: sizing.container.width * sizing.container.width / sizing.container.scrollWidth,
@@ -429,7 +450,7 @@
 					top: 0
 				}
 			};
-			
+
 			sizing.container.width -= sizing.thumbs.horizontal.width;
 			sizing.container.height -= sizing.thumbs.vertical.height;
 			
