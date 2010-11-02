@@ -1,5 +1,5 @@
-/*!
- * Overscroll v1.3.5
+/**
+ * @license Overscroll v1.3.5
  *  A jQuery Plugin that emulates the iPhone scrolling experience in a browser.
  *  http://azoffdesign.com/overscroll
  *
@@ -187,9 +187,11 @@
 				.bind(o.events.wheel, data, o.wheel)
 				.bind(o.events.start, data, o.start)
 				.bind(o.events.end, data, o.stop)
+				.bind(o.events.resize, data, o.resize)
 				.bind(o.events.ignored, o.noop); // disable proprietary drag handlers
 
-			$(window).bind(o.events.resize, data, o.resize);
+			// This will leak objects
+			//$(window).bind(o.events.resize, data, o.resize);
 
 			data.target = target;
 			data.options = options;
@@ -302,9 +304,10 @@
 			o.toggleDragMode(event.data, true);
 			event.data.position = o.setPosition(event, {});
 			event.data.capture = o.setPosition(event, {}, 2);
-			
-			return false;
-			
+
+			// Do not prevent the selection. (Caller is reasonable to do that by itself)
+			return true;
+
 		},
 		
 		// updates the current scroll location during a mouse move
