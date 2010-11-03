@@ -166,7 +166,9 @@
 				wheelDelta: o.constants.wheelDelta,
 				scrollDelta: o.constants.scrollDelta,
 				direction: 'multi',
-				onDriftEnd: $.noop
+				onDriftEnd: $.noop,
+				oob: true,
+				oobEasing: $.easing.easeOutElastic ? "easeOutElastic" : "swing"
 			}, (options || {}));
 			
 			options.scrollDelta = m.abs(options.scrollDelta);
@@ -195,6 +197,7 @@
 
 			data.target = target;
 			data.options = options;
+			data.content = target.children(":first-child").css("position", "relative");
 
 			o.setThumbs(data);
 		},
@@ -304,6 +307,8 @@
 			o.toggleDragMode(event.data, true);
 			event.data.position = o.setPosition(event, {});
 			event.data.capture = o.setPosition(event, {}, 2);
+			if (event.data.options.oob)
+				event.data.margins = { left: 0, top: 0, right: 0, bottom: 0 };
 
 			// Do not prevent the selection. (Caller is reasonable to do that by itself)
 			return true;
@@ -313,13 +318,11 @@
 		// updates the current scroll location during a mouse move
 		drag: function(event, ml, mt, left, top) {
 
-			if(event.data.options.direction !== 'vertical') {
-			   this.scrollLeft -= (event.pageX - event.data.position.x);
-			}
-			if(event.data.options.direction !== 'horizontal') {
-			   this.scrollTop -= (event.pageY - event.data.position.y);
-			}
-			
+			if (event.data.options.direction !== 'vertical')
+				o.doScroll(this, event, "X", "Left", "Right", "Width");
+			if (event.data.options.direction !== 'horizontal')
+				o.doScroll(this, event, "Y", "Top", "Bottom", "Height");
+	
 			o.setPosition(event, event.data.position);
 			
 			if (--event.data.capture.index <= 0 ) {
@@ -330,38 +333,89 @@
 			return true;
 		
 		},
-		
+
+		doScroll: function(target, event, axis, lower, upper, length) {
+			var data = event.data, margins, up, lo,
+				delta = event["page" + axis] - data.position[axis.toLowerCase()],
+				scroll = target["scroll" + lower] - delta,
+				scrollLength;
+
+			if (data.margins) {
+				margins = data.margins;
+				lo = lower.toLowerCase();
+				up = upper.toLowerCase();
+				scrollLength = data.sizing.container["scroll" + length];
+
+				if (margins[up] == 0 && (scroll < 0 || margins[lo] > 0)) {
+					margins[lo] += delta;
+					if (margins[lo] < 0)
+						margins[lo] = 0;
+					data.content.css(lo, margins[lo] + "px");
+					return;
+				}
+
+				if (margins[lo] == 0 && (scroll > scrollLength || margins[up] > 0)) {
+					margins[up] -= delta;
+					if (margins[up] < 0)
+						margins[up] = 0;
+					data.content.css(lo, (- margins[up]) + "px");
+					return;
+				}
+			}
+
+			target["scroll" + lower] = scroll;
+		},
+
 		// ends the drag operation and unbinds the mouse move handler
 		stop: function(event, dx, dy, d) {
+
+			var oob; // out of bound
+
+			if (event.data.margins) {
+				d = {};
+				$.each([["left", "left"], ["top", "top"], ["right", "left"], ["bottom", "top"]], function(i, v) {
+					if (event.data.margins[v[0]] > 0)
+						d[v[1]] = 0;
+				});
+				oob = !$.isEmptyObject(d);
+				if (oob)
+					event.data.content.animate(d, {
+						easing: event.data.options.oobEasing,
+						complete: function() {
+							event.data.content.css({"left": "", "top": ""});
+						}
+					});
+				delete event.data.margins;
+			}
 
 			if(event.data.position) {
 
 				event.data.target.unbind(o.events.drag, o.drag);
 				
 				if(event.data.target.data('dragging')) {
-				 
-				    dx = event.data.options.scrollDelta * (event.pageX - event.data.capture.x);
-                    dy = event.data.options.scrollDelta * (event.pageY - event.data.capture.y);
-                    d = {};
+				 	if (!oob) {
+						dx = event.data.options.scrollDelta * (event.pageX - event.data.capture.x);
+						dy = event.data.options.scrollDelta * (event.pageY - event.data.capture.y);
+						d = {};
 
-                    if(event.data.options.direction !== 'vertical') {
-                        d.scrollLeft = this.scrollLeft - dx;
-                    }
+						if(event.data.options.direction !== 'vertical') {
+							d.scrollLeft = this.scrollLeft - dx;
+						}
 
-                    if(event.data.options.direction !== 'horizontal') {
-                        d.scrollTop = this.scrollTop - dy;
-                    }
+						if(event.data.options.direction !== 'horizontal') {
+							d.scrollTop = this.scrollTop - dy;
+						}
 
-                    event.data.target.animate(d, {  
-                        duration: o.constants.scrollDuration, 
-                        easing: 'cubicEaseOut',
-                        complete: function() {
-                            event.data.target.data('dragging', false);
-                            event.data.options.onDriftEnd.call(event.data.target, event.data);
-                            o.toggleDragMode(event.data, false);
-                        }
-                    });
-				    
+						event.data.target.animate(d, {
+							duration: o.constants.scrollDuration,
+							easing: 'cubicEaseOut',
+							complete: function() {
+								event.data.target.data('dragging', false);
+								event.data.options.onDriftEnd.call(event.data.target, event.data);
+								o.toggleDragMode(event.data, false);
+							}
+						});
+					}
 				} else {
 				     o.toggleDragMode(event.data, false);
 				}
@@ -369,7 +423,7 @@
                 event.data.capture = event.data.position = undefined;
                 
 			}
-			
+
 			return !event.data.target.data('dragging');
 		},
 
@@ -414,7 +468,7 @@
 					target.scrollTop(0).scrollLeft(0);
 					target.bind(o.events.scroll, data, o.scroll);
 				}
-			}			
+			}
 		},
 		
 		// gets sizing for the container and thumbs
@@ -487,7 +541,7 @@
 			var c = firstNum + diff;
 			return c*((p=p/1-1)*p*p + 1) + firstNum;
 		}
-		
+
 	});
 
 })(window, Math, jQuery);
